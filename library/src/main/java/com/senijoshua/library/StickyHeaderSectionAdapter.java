@@ -8,11 +8,11 @@ import android.view.ViewGroup;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeaderSectionAdapter.GroupViewHolder> {
 
     private ArrayList<Group> groups;
-    private ArrayList<Section> sections;
     private HashMap<Integer, Boolean> hiddenGroups = new HashMap<>();
     private HashMap<Integer, Boolean> hiddenSections = new HashMap<>();
     private HashMap<Integer, GroupSelectionState> selectionStateByGroup = new HashMap<>();
@@ -248,10 +248,11 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
         int adapterPosition;    // adapterPosition of first item i.e the header  of this group
         int numberOfSections;   // number of items including section header + section items excluding group header
         int length;             // total number of items in groups including  group header, sections and all its items
-        boolean isStickyHeader;      // if true, the group is at the top of the list i.e sticky header
+        boolean hasHeader;      // if true, the group has a header
         private int[] sectionIndicesByGroupPosition; // An array that holds the indices of the group's contents at each position
-        // i.e. section 0 & item 0 in that section would both have indices of 0
-        // at positions 0 and 1 respectively.
+                                                     // i.e. section 0 & item 0 in that section would both have indices of 0
+                                                     // at positions 0 and 1 respectively.
+        private ArrayList<Section> sections;
     }
 
 
@@ -261,7 +262,7 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
         int numberOfItems;      // number of items in the section excluding the section header. (Ideally this would be length - 1)
         int length;             // total number of items in sections including header and footer
         int indexInGroup;       // This denotes the index of the section in the group where 0 is the first section in the group
-        boolean isStickyHeader;      // if true, the section is at the top of the list under the group header
+        boolean hasHeader;      // if true, the section has a header
     }
 
     private static class GroupSelectionState {
@@ -341,7 +342,7 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
      * @param GroupIndex index of the concerned group
      * @return if this group is a header at the top of the list.
      */
-    public boolean isGroupSticky(int GroupIndex) {
+    public boolean doesGroupHaveHeader(int GroupIndex) {
         return false;
     }
 
@@ -350,12 +351,11 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
      * @param sectionIndex index of the concerned section within a group
      * @return if this section is a header at the top of the list under the group's sticky header.
      */
-    public boolean isSectionSticky(int sectionIndex, int groupIndex) {
+    public boolean doesSectionHaveHeader(int sectionIndex, int groupIndex) {
         return false;
     }
 
     /**
-     *
      * @param adapterPosition the position in the adapter which ranges from 0 to getItemCount() - 1
      * @return the index of the group that corresponds to the adapter position where 0 is the first group in the list
      */
@@ -376,13 +376,59 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
     }
 
     /**
-     *
      * @param groupIndex
      * @param adapterPosition
-     * @return the index of the section that a certain pos
+     * @return position of a section in a group given a particular adapter position
      */
-    public int getSectionInGroupForAdapterPosition(int groupIndex, int adapterPosition) {
+    public int getSectionPositionInGroup(int groupIndex, int adapterPosition) {
+        assessGroupState(groupIndex);
 
+        Group group = groups.get(groupIndex);
+        int sectionPositionInGroup = adapterPosition - group.adapterPosition;
+        if (sectionPositionInGroup > group.length){
+            throw new IndexOutOfBoundsException("The adapterPosition: " + adapterPosition + " is beyond group with Index: " + groupIndex + " with length: " + group.length);
+        }
+
+        if (group.hasHeader){
+            sectionPositionInGroup -= 1;
+        }
+        return sectionPositionInGroup;
+    }
+
+    public int getItemPositionInSectionWithinGroup(int groupIndex, int sectionIndex, int adapterPosition){
+        assessGroupState(groupIndex);
+        Group group = groups.get(groupIndex);
+        int sectionPositionInGroup = group.sectionIndicesByGroupPosition[adapterPosition];
+        Section section = group.sections.get(sectionPositionInGroup);
+        int itemPositionInSection = adapterPosition - section.adapterPosition;
+
+        if (itemPositionInSection > section.length){
+            throw new IndexOutOfBoundsException("The adapterPosition: " + adapterPosition + " is beyond section in group with group Index: " + groupIndex + " and section Index " + sectionPositionInGroup + " with length: " + section.length);
+        }
+
+        if (section.hasHeader){
+            itemPositionInSection -= 1;
+        }
+
+        return itemPositionInSection;
+    }
+
+    public int getAdapterPosition(){
+
+    }
+
+    private void assessGroupState(int groupIndex) {
+        if (groups == null){
+            buildGroupIndex();
+        }
+
+        if (groupIndex < 0) {
+            throw new IndexOutOfBoundsException("The given groupIndex " + groupIndex + " is less than 0");
+        }
+
+        if (groupIndex >= groups.size()) {
+            throw new IndexOutOfBoundsException("The given groupIndex " + groupIndex + " >= the group size (" + groups.size() + ")");
+        }
     }
 
 
@@ -393,7 +439,7 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
         for (int groupIndex = 0, groupCount = getNumberOfGroups(); groupIndex < groupCount; groupIndex++) {
             Group group = new Group();
             group.adapterPosition = i;
-            group.isStickyHeader = isGroupSticky(groupIndex);
+            group.hasHeader = doesGroupHaveHeader(groupIndex);
 
             if (isGroupHidden(groupIndex)) {
                 group.length = 0;
@@ -402,7 +448,7 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
                 group.length = group.numberOfSections + getNumberOfItemsInSectionWithinGroup(groupIndex);
             }
 
-            if (group.isStickyHeader) {
+            if (group.hasHeader) {
                 group.length += 1; // room for f
             }
 
@@ -431,7 +477,6 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
     private void buildSectionIndex(int groupIndex, int[] groupIndicesByAdapterPosition) {
         int totalNumberOfItemsInGroup;
         Group group = groups.get(groupIndex);
-        sections = new ArrayList<>();
 
         int i = 0;
         for (int sectionIndexInGroup = 0, sectionCount = getNumberOfSectionsInGroup(groupIndex);
@@ -440,7 +485,7 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
             section.adapterPosition = group.adapterPosition + i + 1;
             section.groupIndex = groupIndex;
             section.indexInGroup = sectionIndexInGroup;
-            section.isStickyHeader = isSectionSticky(sectionIndexInGroup, groupIndex);
+            section.hasHeader = doesSectionHaveHeader(sectionIndexInGroup, groupIndex);
 
             if (isSectionHidden(sectionIndexInGroup, groupIndex)) {
                 section.length = 0;
@@ -449,11 +494,11 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
                 section.length = section.numberOfItems = getNumberOfItemsInSection(sectionIndexInGroup, groupIndex);
             }
 
-            if (section.isStickyHeader) {
+            if (section.hasHeader) {
                 section.length += 1; // room for header
             }
 
-            this.sections.add(section);
+           group.sections.add(section);
 
             i += section.length;
         }
@@ -464,7 +509,7 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
         group.sectionIndicesByGroupPosition = new int[totalNumberOfItemsInGroup];
         for (int sectionIndexInGroup = 0, sectionCount = getNumberOfSectionsInGroup(groupIndex);
              sectionIndexInGroup < sectionCount; sectionIndexInGroup++) {
-            Section section = sections.get(sectionIndexInGroup);
+            Section section = group.sections.get(sectionIndexInGroup);
             for (int pos = 0; pos < section.length; pos++) {
                 group.sectionIndicesByGroupPosition[i + pos] = sectionIndexInGroup;
             }

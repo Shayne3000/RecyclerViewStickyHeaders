@@ -12,6 +12,7 @@ import java.util.List;
 
 public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeaderSectionAdapter.GroupViewHolder> {
 
+    public static final int NO_POSITION = -1;
     private ArrayList<Group> groups;
     private HashMap<Integer, Boolean> hiddenGroups = new HashMap<>();
     private HashMap<Integer, Boolean> hiddenSections = new HashMap<>();
@@ -257,7 +258,7 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
 
 
     private static class Section {
-        int adapterPosition;    // adapterPosition of first item (the header) of this section
+        int adapterPosition;    // adapterPosition of first item (which could be the header) of this section
         int groupIndex;         // this denotes the group this section belongs to where 0 is the first group in the list.
         int numberOfItems;      // number of items in the section excluding the section header. (Ideally this would be length - 1)
         int length;             // total number of items in sections including header and footer
@@ -351,7 +352,7 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
      * @param sectionIndex index of the concerned section within a group
      * @return if this section is a header at the top of the list under the group's sticky header.
      */
-    public boolean doesSectionHaveHeader(int sectionIndex, int groupIndex) {
+    public boolean doesSectionHaveHeader(int groupIndex, int sectionIndex) {
         return false;
     }
 
@@ -413,8 +414,71 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
         return itemPositionInSection;
     }
 
-    public int getAdapterPosition(){
+    //in offeset 0 is the group header, 1 is the first item, be it a section head, be it a section item
+    private int getAdapterPositionInGroup(int groupIndex, int offsetIntoGroup){
+        assessGroupState(groupIndex);
 
+        Group group = this.groups.get(groupIndex);
+        return offsetIntoGroup + group.adapterPosition;
+    }
+
+    public int getAdapterPositionForGroupHeader(int groupIndex){
+        if (doesGroupHaveHeader(groupIndex)){
+            return getAdapterPositionInGroup(groupIndex, 0);
+        } else {
+            return NO_POSITION;
+        }
+    }
+
+    private int getAdapterPositionForSectionInGroup(int groupIndex, int sectionIndex, int offsetIntoSection){
+        assessGroupState(groupIndex);
+
+        Group group = this.groups.get(groupIndex);
+        Section section = group.sections.get(sectionIndex);
+        if (doesGroupHaveHeader(groupIndex)) {
+            return offsetIntoSection + section.adapterPosition + 1;
+        } else {
+            return offsetIntoSection + section.adapterPosition;
+        }
+    }
+
+    public int getAdapterPositionForSectionHeaderInGroup(int groupIndex, int sectionIndex){
+       if (doesSectionHaveHeader(groupIndex, sectionIndex)){
+           return getAdapterPositionForSectionInGroup(groupIndex, sectionIndex, 0);
+       } else {
+           return  NO_POSITION;
+       }
+    }
+
+    public int getAdapterPositionForSectionItemInGroup(int groupIndex, int sectionIndex, int offsetIntoSection){
+        int adapterPostionForSectionInGroup = getAdapterPositionForSectionInGroup(groupIndex, sectionIndex, offsetIntoSection);
+        if (doesSectionHaveHeader(groupIndex, sectionIndex)){
+            return adapterPostionForSectionInGroup + 1;
+        } else {
+            return adapterPostionForSectionInGroup;
+        }
+
+    }
+
+    public void setGroupIsHidden(int groupIndex, boolean hidden){
+        boolean notify = isGroupHidden(groupIndex) != hidden;
+
+        hiddenGroups.put(groupIndex, hidden);
+
+        if (notify){
+            if (groups == null){
+                buildGroupIndex();
+            }
+
+            Group group = groups.get(groupIndex);
+            int number = group.length;
+
+            if (hidden){
+                notifySectionItemRangeRemoved(groupIndex, 0, number, false);
+            } else {
+                notifySectionItemRangeInserted(groupIndex, 0, number, false);
+            }
+        }
     }
 
     private void assessGroupState(int groupIndex) {
@@ -485,7 +549,7 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
             section.adapterPosition = group.adapterPosition + i + 1;
             section.groupIndex = groupIndex;
             section.indexInGroup = sectionIndexInGroup;
-            section.hasHeader = doesSectionHaveHeader(sectionIndexInGroup, groupIndex);
+            section.hasHeader = doesSectionHaveHeader(groupIndex, sectionIndexInGroup);
 
             if (isSectionHidden(sectionIndexInGroup, groupIndex)) {
                 section.length = 0;
@@ -517,6 +581,41 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
             i += section.length;
         }
     }
+
+    /**
+     * Notify that all data in the list is invalid and the whole list needs to be reloaded.
+     * This should be called instead of notifyDataSetChanged.
+     */
+    public void notifyAllGroupsDataSetChanged(){
+        buildGroupIndex();
+        notifyDataSetChanged();
+        hiddenGroups.clear();
+        hiddenSections.clear();
+        selectionStateByGroup.clear();
+        selectionStateBySection.clear();
+    }
+
+    /**
+     * Notify that all the items in a given group are invalid and that group should be reloaded.
+     * This should be called instead of notifyDataSetChanged
+     * @param groupIndex index of the group to reload
+     */
+    public void notifyGroupDataSetChanged(int groupIndex){
+        if (groups == null){
+            buildGroupIndex();
+            notifyAllGroupsDataSetChanged();
+        } else {
+            buildGroupIndex();
+            Group group = this.groups.get(groupIndex);
+            notifyItemRangeChanged(group.adapterPosition, group.length);
+        }
+
+        // clear item selection state
+        getGroupSelectionState(groupIndex).section.clear();
+    }
+
+    public void notifyGroupSectionRangeInserted
+
 }
 
 

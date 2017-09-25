@@ -611,10 +611,38 @@ public class StickyHeaderSectionAdapter extends RecyclerView.Adapter<StickyHeade
         }
 
         // clear item selection state
-        getGroupSelectionState(groupIndex).section.clear();
+        //getGroupSelectionState(groupIndex).section.clear();
     }
 
-    public void notifyGroupSectionRangeInserted
+    /**
+     * Notify that a range of sections with items have been inserted into a group
+     * @param groupIndex index of the group
+     * @param fromPosition index from which the addition would commence
+     * @param number amount of items added which would basically be the number of items + section headers
+     */
+    public void notifySectionRangeInsertedInGroup(int groupIndex, int fromPosition, int number){
+        notifySectionRangeInsertedInGroup(groupIndex, fromPosition, number, true);
+    }
+
+    private void notifySectionRangeInsertedInGroup(int groupIndex, int fromPosition, int number, boolean updateGroupState){
+        if (groups == null){
+            buildGroupIndex();
+            notifyAllGroupsDataSetChanged();
+        } else {
+            buildGroupIndex();
+            Group group = this.groups.get(groupIndex);
+            List<Section> sections = group.sections;
+            Section lastSection = sections.get(sections.size() - 1);
+            int lastItemIndex = group.adapterPosition + (group.length - 1);
+
+
+            if (fromPosition > lastItemIndex) {
+                throw new IndexOutOfBoundsException("sectionIndex adapterPosition: " + fromPosition + " exceeds group length " + group.length);
+            }
+
+
+        }
+    }
 
 }
 

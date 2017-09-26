@@ -5,9 +5,11 @@ import android.os.Handler;
 import android.support.v7.widget.RecyclerView;
 import android.view.View;
 import android.view.ViewGroup;
+
 import java.util.ArrayList;
 
 public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<NestedSectionStickyHeaderAdapter.ViewHolder> {
+    public static final int NO_POSITION = -1;
     private ArrayList<Section> sections;
     private int[] sectionIndicesByAdapterPosition;
     private int totalNumberOfItems;
@@ -293,6 +295,20 @@ public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<Neste
         }
     }
 
+    private void assessSectionState(int sectionIndex) {
+        if (sections == null) {
+            buildSectionIndex();
+        }
+
+        if (sectionIndex < 0) {
+            throw new IndexOutOfBoundsException("The given groupIndex " + sectionIndex + " is less than 0");
+        }
+
+        if (sectionIndex >= sections.size()) {
+            throw new IndexOutOfBoundsException("The given groupIndex " + sectionIndex + " >= the group size (" + sections.size() + ")");
+        }
+    }
+
     /**
      * Given a position in the adapter, determine which section contains that item
      *
@@ -315,7 +331,109 @@ public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<Neste
         return sectionIndicesByAdapterPosition[adapterPosition];
     }
 
-    
+    /**
+     * Given a sectionIndex and an adapter position, get the local position of an item in a section
+     * where the first item has position 0
+     *
+     * @param sectionIndex    the index of the containing section
+     * @param adapterPosition the given adapter position
+     * @return the position of an item in that section denoted by the sectionIndex
+     * <p/>
+     * Note, if the adapterPosition corresponds to a sectionIndex parent or child header, this will return -1
+     */
+    public int getPositionOfItemInSection(int sectionIndex, int adapterPosition) {
+        assessSectionState(sectionIndex);
+
+        Section section = this.sections.get(sectionIndex);
+        int itemPositionInSection = adapterPosition - section.adapterPosition;
+        if (itemPositionInSection > section.length) {
+            throw new IndexOutOfBoundsException("The adapterPosition: " + adapterPosition + " is beyond section with Index: " + sectionIndex + " with length: " + section.length);
+        }
+
+        if (section.hasChildHeader) {
+            // adjust for header and ghostHeader
+            itemPositionInSection -= 1;
+        }
+
+        if (section.hasParentHeader) {
+            // adjust for header
+            itemPositionInSection -= 1;
+        }
+
+        return itemPositionInSection;
+    }
+
+    /**
+     * Given a sectionIndex index, and an offset into the section where 0 is the parent header, 1 is the child Header,
+     * 2 is the first item in the sectionIndex, return the corresponding "global" adapter position
+     *
+     * @param sectionIndex      index of the concerned section
+     * @param offsetIntoSection offset into section
+     * @return the "global" adapter adapterPosition
+     */
+    private int getAdapterPosition(int sectionIndex, int offsetIntoSection) {
+        assessSectionState(sectionIndex);
+
+        Section section = this.sections.get(sectionIndex);
+        int adapterPosition = section.adapterPosition;
+        return offsetIntoSection + adapterPosition;
+    }
+
+    /**
+     * Return the adapter position that corresponds to the parent header of the provided section
+     *
+     * @param sectionIndex the index of the concerned section
+     * @return adapter position of that section's parent header, or NO_POSITION if section has no parent header
+     */
+    public int getAdapterPositionForSectionParentHeader(int sectionIndex) {
+        if (doesSectionHaveParentHeader(sectionIndex)) {
+            return getAdapterPosition(sectionIndex, 0);
+        } else {
+            return NO_POSITION;
+        }
+    }
+
+    /**
+     * Return the adapter position that corresponds to the child header of the provided section
+     *
+     * @param sectionIndex the index of the concerned section
+     * @return adapter position of that section's child header, or NO_POSITION if section has no child header
+     */
+    public int getAdapterPositionForSectionChildHeader(int sectionIndex) {
+        if (doesSectionHaveChildHeader(sectionIndex)) {
+            if (doesSectionHaveParentHeader(sectionIndex)) {
+                return getAdapterPosition(sectionIndex, 1);
+            } else {
+                return getAdapterPosition(sectionIndex, 0);
+            }
+        } else {
+            return NO_POSITION;
+        }
+    }
+
+    /**
+     * Return the adapter position corresponding to a specific item in the section
+     *
+     * @param sectionIndex      the index of the concerned section
+     * @param offsetIntoSection the offset of the item in the section where 0 would be the first item in the section
+     * @return adapter position of the item in the section
+     */
+
+    public int getAdapterPositionForSectionItem(int sectionIndex, int offsetIntoSection) {
+        if (doesSectionHaveParentHeader(sectionIndex)) {
+            if (doesSectionHaveChildHeader(sectionIndex)) {
+                return getAdapterPosition(sectionIndex, offsetIntoSection) + 2; // parent header is at position 0, childHeader at position 1
+            } else {
+                return getAdapterPosition(sectionIndex, offsetIntoSection) + 1; // parent header is at position 0
+            }
+        } else {
+            if (doesSectionHaveChildHeader(sectionIndex)) {
+                return getAdapterPosition(sectionIndex, offsetIntoSection) + 1; // childHeader at position 0
+            } else {
+                return getAdapterPosition(sectionIndex, offsetIntoSection); //no headers
+            }
+        }
+    }
 
 }
 

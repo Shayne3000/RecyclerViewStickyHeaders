@@ -435,5 +435,146 @@ public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<Neste
         }
     }
 
+    /**
+     * Notify that all data in the list is invalid and the whole list needs to be reloaded.
+     * This should be called instead of the RecyclerView.Adapter.notifyDataSetChanged equivalent.
+     */
+    public void notifyAllSectionsDataSetChanged() {
+        buildSectionIndex();
+        notifyDataSetChanged();
+    }
+
+    /**
+     * Notify that all the items in a given section are invalid and the section should be reloaded.
+     * @param sectionIndex index of the section to reload
+     */
+    public void notifySectionDataSetChanged(int sectionIndex){
+        if (sections == null) {
+            buildSectionIndex();
+            notifyAllSectionsDataSetChanged();
+        } else {
+            buildSectionIndex();
+            Section section = this.sections.get(sectionIndex);
+            notifyItemRangeChanged(section.adapterPosition, section.length);
+        }
+    }
+
+    /**
+     * Notify that a given item in a section has been invalidated and should be reloaded
+     * This should be called instead of the RecyclerView.Adapter.notifyItemChanged equivalent
+     *
+     * @param sectionIndex the index of the section containing the item
+     * @param itemIndex    the index of the item in the section (where 0 is the first item in the section)
+     */
+    public void notifySectionItemChanged(int sectionIndex, int itemIndex) {
+        if (sections == null) {
+            buildSectionIndex();
+            notifyAllSectionsDataSetChanged();
+        } else {
+            buildSectionIndex();
+            Section section = this.sections.get(sectionIndex);
+            if (itemIndex >= section.numberOfItems) {
+                throw new IndexOutOfBoundsException("The item Index " + itemIndex + " exceeds the number of items: " + section.numberOfItems + " in section: " + sectionIndex);
+            }
+            if (section.hasChildHeader) {
+                itemIndex += 1;
+            }
+
+            if (section.hasParentHeader) {
+                itemIndex += 1;
+            }
+            notifyItemChanged(section.adapterPosition + itemIndex);
+        }
+    }
+
+    /**
+     * Notify that an item has been added to a section
+     * This should be called instead of the RecyclerView.Adapter.notifyItemInserted equivalent
+     *
+     * @param sectionIndex index of the section in question
+     * @param itemIndex    index of the item where 0 is the index of the first item in the section
+     */
+    public void notifySectionItemInserted(int sectionIndex, int itemIndex) {
+        if (sections == null) {
+            buildSectionIndex();
+            notifyAllSectionsDataSetChanged();
+        } else {
+            buildSectionIndex();
+            Section section = this.sections.get(sectionIndex);
+
+            int offset = getSectionOffset(section, itemIndex);
+            notifyItemInserted(section.adapterPosition + offset);
+        }
+    }
+
+    /**
+     * Notify that an item has been removed from a section
+     * This should be called instead of the RecyclerView.Adapter.notifyItemRemoved
+     *
+     * @param sectionIndex index of the section in question
+     * @param itemIndex    index of the item in the section where 0 is the index of the first item in the section
+     */
+    public void notifySectionItemRemoved(int sectionIndex, int itemIndex) {
+        if (sections == null) {
+            buildSectionIndex();
+            notifyAllSectionsDataSetChanged();
+        } else {
+            buildSectionIndex();
+            Section section = this.sections.get(sectionIndex);
+
+            int offset = getSectionOffset(section, itemIndex);
+            notifyItemRemoved(section.adapterPosition + offset);
+        }
+    }
+
+
+
+    private int getSectionOffset(Section section, int offset) {
+        if (section.hasChildHeader) {
+            offset += 1;
+        }
+
+        if (section.hasParentHeader) {
+            offset += 1;
+        }
+        return offset;
+    }
+
+    /**
+     * Notify that a new section has been added
+     *
+     * @param sectionIndex position of the new section
+     */
+    public void notifySectionInserted(int sectionIndex) {
+        if (sections == null) {
+            buildSectionIndex();
+            notifyAllSectionsDataSetChanged();
+        } else {
+            buildSectionIndex();
+            Section section = this.sections.get(sectionIndex);
+            notifyItemRangeInserted(section.adapterPosition, section.length);
+        }
+
+        updateCollapseAndSelectionStateForSectionChange(sectionIndex, +1);
+    }
+
+    /**
+     * Notify that a section has been removed
+     *
+     * @param sectionIndex position of the removed section
+     */
+    public void notifySectionRemoved(int sectionIndex) {
+        if (sections == null) {
+            buildSectionIndex();
+            notifyAllSectionsDataSetChanged();
+        } else {
+            Section section = this.sections.get(sectionIndex);
+            buildSectionIndex();
+            notifyItemRangeRemoved(section.adapterPosition, section.length);
+        }
+
+        updateCollapseAndSelectionStateForSectionChange(sectionIndex, -1);
+    }
+
 }
 

@@ -2,6 +2,7 @@ package com.senijoshua.library;
 
 
 import android.os.Handler;
+import android.os.Looper;
 import android.support.v7.widget.RecyclerView;
 import android.view.View;
 import android.view.ViewGroup;
@@ -10,6 +11,10 @@ import java.util.ArrayList;
 
 public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<NestedSectionStickyHeaderAdapter.ViewHolder> {
     public static final int NO_POSITION = -1;
+    public static final int TYPE_PARENT_HEADER = 0;
+    public static final int TYPE_CHILD_HEADER = 1;
+    public static final int TYPE_ITEM = 2;
+
     private ArrayList<Section> sections;
     private int[] sectionIndicesByAdapterPosition;
     private int totalNumberOfItems;
@@ -17,17 +22,167 @@ public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<Neste
 
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        return null;
+
+        int baseViewType = unmaskBaseViewType(viewType);
+        int userViewType = unmaskUserViewType(viewType);
+
+        switch (baseViewType) {
+            case TYPE_ITEM:
+                return onCreateItemViewHolder(parent, userViewType);
+            case TYPE_CHILD_HEADER:
+                return onCreateChildHeaderViewHolder(parent, userViewType);
+            case TYPE_PARENT_HEADER:
+                return onCreateParentHeaderViewHolder(parent, userViewType);
+        }
+
+        throw new IndexOutOfBoundsException("The viewType: " + viewType + " is unrecognized and it does not correspond to either TYPE_ITEM, TYPE_CHILD_HEADER or TYPE_PARENT");
     }
 
     @Override
     public void onBindViewHolder(ViewHolder holder, int position) {
+        int section = getSectionForAdapterPosition(position);
 
+        // bind the sections to this view holder
+        holder.setSection(section);
+        holder.setNumberOfItemsInSection(getNumberOfItemsInSection(section));
+
+        // tag the viewHolder's item so as to make it possible to track in the layout manager
+        tagViewHolderItemView(holder, section, position);
+
+        int baseType = unmaskBaseViewType(holder.getItemViewType());
+        int userType = unmaskUserViewType(holder.getItemViewType());
+        switch (baseType) {
+            case TYPE_PARENT_HEADER:
+                onBindParentHeaderViewHolder((ParentHeaderViewHolder) holder, section, userType);
+                break;
+
+            case TYPE_CHILD_HEADER:
+                onBindChildHeaderViewHolder((ChildHeaderViewHolder) holder, section, userType);
+                break;
+
+            case TYPE_ITEM:
+                ItemViewHolder itemHolder = (ItemViewHolder) holder;
+                int positionInSection = getPositionOfItemInSection(section, position);
+                itemHolder.setPositionInSection(positionInSection);
+                onBindItemViewHolder(itemHolder, section, positionInSection, userType);
+                break;
+
+            default:
+                throw new IllegalArgumentException("The viewType: " + baseType + " is unrecognized and it does not correspond to either TYPE_ITEM, TYPE_CHILD_HEADER or TYPE_PARENT");
+        }
+    }
+
+    /**
+     * Tag the itemView of the view holder with information needed for the layout to handle its sticky positioning.
+     * @param holder the holder containing the itemView to tag
+     * @param section the section that this itemView relates to
+     * @param adapterPosition the adapter position of the view holder
+     */
+    private void tagViewHolderItemView(ViewHolder holder, int section, int adapterPosition) {
+        View view = holder.itemView;
+        view.setTag(R.id.nested_sticky_view_holder_tag, holder);
     }
 
     @Override
     public int getItemCount() {
-        return 0;
+        if (sections == null) {
+            buildSectionIndex();
+        }
+        return totalNumberOfItems;
+    }
+
+    @Override
+    public int getItemViewType(int position) {
+        if (sections == null) {
+            buildSectionIndex();
+        }
+
+        if (position < 0) {
+            throw new IndexOutOfBoundsException(" The adapterPosition (" + position + ") cannot be less than 0");
+        } else if (position >= getItemCount()) {
+            throw new IndexOutOfBoundsException(" The adapterPosition (" + position + ")  cannot be greater than getItemCount() (" + getItemCount() + ")");
+        }
+
+        int sectionIndex = getSectionForAdapterPosition(position);
+        Section section = this.sections.get(sectionIndex);
+        int localPosition = position - section.adapterPosition;
+
+        int baseType = getItemViewBaseType(section, localPosition);
+        int userType = 0;
+
+        switch (baseType) {
+            case TYPE_PARENT_HEADER:
+                userType = getSectionParentHeaderViewType(sectionIndex);
+                if (userType < 0 || userType > 0xFF) {
+                    throw new IllegalArgumentException("Custom parent header view type (" + userType + ") must be in range [0,255]");
+                }
+                break;
+            case TYPE_CHILD_HEADER:
+                userType = getSectionChildHeaderViewType(sectionIndex);
+                if (userType < 0 || userType > 0xFF) {
+                    throw new IllegalArgumentException("Custom child header view type (" + userType + ") must be in range [0,255]");
+                }
+                break;
+            case TYPE_ITEM:
+                // adjust local position to accommodate the parent and child header
+                if (section.hasParentHeader) {
+                    localPosition -= 1;
+                }
+
+                if (section.hasChildHeader) {
+                    localPosition -= 1;
+                }
+                userType = getSectionItemViewType(sectionIndex, localPosition);
+                if (userType < 0 || userType > 0xFF) {
+                    throw new IllegalArgumentException("Custom item view type (" + userType + ") must be in range [0,255]");
+                }
+                break;
+        }
+
+        // base is bottom 8 bits, user type next 8 bits
+        return ((userType & 0xFF) << 8) | (baseType & 0xFF);
+    }
+
+    private int getItemViewBaseType(Section section, int localPosition) {
+        if (section.hasParentHeader && section.hasChildHeader) {
+            if (localPosition == 0) {
+                return TYPE_PARENT_HEADER;
+            } else if (localPosition == 1) {
+                return TYPE_CHILD_HEADER;
+            } else {
+                return TYPE_ITEM;
+            }
+        } else if (section.hasParentHeader) {
+            if (localPosition == 0) {
+                return TYPE_PARENT_HEADER;
+            } else {
+                return TYPE_ITEM;
+            }
+        } else if (section.hasChildHeader) {
+            if (localPosition == 0) {
+                return TYPE_CHILD_HEADER;
+            } else {
+                return TYPE_ITEM;
+            }
+        } else {
+            return TYPE_ITEM;
+        }
+    }
+
+    /**
+     * @param adapterPosition the adapterPosition of the item in question
+     * @return the custom user type of the item at the adapterPosition
+     */
+    public int getItemViewUserType(int adapterPosition) {
+        return unmaskUserViewType(getItemViewType(adapterPosition));
+    }
+
+    public static int unmaskBaseViewType(int itemViewTypeMask) {
+        return itemViewTypeMask & 0xFF; // base view type (PARENT_HEADER/CHILD_HEADER/ITEM) is lower 8 bits
+    }
+
+    public static int unmaskUserViewType(int itemViewTypeMask) {
+        return (itemViewTypeMask >> 8) & 0xFF; // use type is in 0x0000FF00 segment
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
@@ -446,9 +601,10 @@ public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<Neste
 
     /**
      * Notify that all the items in a given section are invalid and the section should be reloaded.
+     *
      * @param sectionIndex index of the section to reload
      */
-    public void notifySectionDataSetChanged(int sectionIndex){
+    public void notifySectionDataSetChanged(int sectionIndex) {
         if (sections == null) {
             buildSectionIndex();
             notifyAllSectionsDataSetChanged();
@@ -528,7 +684,6 @@ public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<Neste
     }
 
 
-
     private int getSectionOffset(Section section, int offset) {
         if (section.hasChildHeader) {
             offset += 1;
@@ -543,7 +698,7 @@ public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<Neste
     /**
      * Notify that a new section has been added
      *
-     * @param sectionIndex position of the new section
+     * @param sectionIndex position of the new section where the first section position starts from 0
      */
     public void notifySectionInserted(int sectionIndex) {
         if (sections == null) {
@@ -554,8 +709,6 @@ public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<Neste
             Section section = this.sections.get(sectionIndex);
             notifyItemRangeInserted(section.adapterPosition, section.length);
         }
-
-        updateCollapseAndSelectionStateForSectionChange(sectionIndex, +1);
     }
 
     /**
@@ -572,9 +725,22 @@ public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<Neste
             buildSectionIndex();
             notifyItemRangeRemoved(section.adapterPosition, section.length);
         }
-
-        updateCollapseAndSelectionStateForSectionChange(sectionIndex, -1);
     }
 
+    /**
+     * Post an action to be run later.
+     * RecyclerView doesn't like being mutated during a scroll. We can't detect when a
+     * scroll is actually happening, unfortunately, so the best we can do is post actions
+     * from notify* methods to be run at a later date.
+     *
+     * @param action action to run
+     */
+    private void post(Runnable action) {
+        if (mainThreadHandler == null) {
+            mainThreadHandler = new Handler(Looper.getMainLooper());
+        }
+
+        mainThreadHandler.post(action);
+    }
 }
 

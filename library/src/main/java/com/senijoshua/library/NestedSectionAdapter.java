@@ -9,7 +9,7 @@ import android.view.ViewGroup;
 
 import java.util.ArrayList;
 
-public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<NestedSectionStickyHeaderAdapter.ViewHolder> {
+public class NestedSectionAdapter extends RecyclerView.Adapter<NestedSectionAdapter.ViewHolder> {
     public static final int NO_POSITION = -1;
     public static final int TYPE_PARENT_HEADER = 0;
     public static final int TYPE_CHILD_HEADER = 1;
@@ -73,14 +73,14 @@ public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<Neste
     }
 
     /**
-     * Tag the itemView of the view holder with information needed for the layout to handle its sticky positioning.
+     * Tag the item View of each of the view holders with information needed for the layout to handle its sticky positioning.
      * @param holder the holder containing the itemView to tag
      * @param section the section that this itemView relates to
      * @param adapterPosition the adapter position of the view holder
      */
     private void tagViewHolderItemView(ViewHolder holder, int section, int adapterPosition) {
         View view = holder.itemView;
-        view.setTag(R.id.nested_sticky_view_holder_tag, holder);
+        view.setTag(R.id.nested_section_view_holder_tag, holder);
     }
 
     @Override
@@ -173,7 +173,7 @@ public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<Neste
      * @param adapterPosition the adapterPosition of the item in question
      * @return the custom user type of the item at the adapterPosition
      */
-    public int getItemViewUserType(int adapterPosition) {
+    public int getItemViewBaseType(int adapterPosition) {
         return unmaskUserViewType(getItemViewType(adapterPosition));
     }
 
@@ -194,11 +194,11 @@ public class NestedSectionStickyHeaderAdapter extends RecyclerView.Adapter<Neste
         }
 
         public int getItemViewBaseType() {
-            return NestedSectionStickyHeaderAdapter.unmaskBaseViewType(getItemViewType());
+            return NestedSectionAdapter.unmaskBaseViewType(getItemViewType());
         }
 
         public int getItemViewUserType() {
-            return NestedSectionStickyHeaderAdapter.unmaskUserViewType(getItemViewType());
+            return NestedSectionAdapter.unmaskUserViewType(getItemViewType());
         }
 
         /*

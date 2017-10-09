@@ -1,10 +1,15 @@
 package com.senijoshua.library;
 
+import android.content.Context;
+import android.graphics.PointF;
 import android.os.Parcel;
 import android.os.Parcelable;
+import android.support.annotation.Nullable;
+import android.support.v7.widget.LinearSmoothScroller;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -738,7 +743,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
      */
     private int updateFirstAdapterPosition() {
 
-        // empty
+        // The list is empty and has no child
         if (getChildCount() == 0) {
             firstViewAdapterPosition = 0;
             firstViewTop = getPaddingTop();
@@ -774,13 +779,200 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
         return getViewAdapterPosition(view) == RecyclerView.NO_POSITION;
     }
 
-    int getViewAdapterPosition(View view) {
-        return getViewViewHolder(view).getAdapterPosition();
+
+    /**
+     * @param fullyVisibleOnly if true, the search will be limited to the first item not hanging off the top of the screen or partially obscured by a parent or child header
+     * @return the viewholder for the first visible item (not parent or child header)
+     */
+    @Nullable
+    public NestedSectionAdapter.ItemViewHolder getFirstVisibleItemViewHolder(boolean fullyVisibleOnly) {
+        return (NestedSectionAdapter.ItemViewHolder) getFirstVisibleViewHolderOfGivenType(NestedSectionAdapter.TYPE_ITEM, fullyVisibleOnly);
     }
 
-    private NestedSectionAdapter.ViewHolder getViewViewHolder(View view) {
+    /**
+     * @param fullyVisibleOnly if true, the search will be limited to the first child header not hanging off the top of the screen or partially obscured by a parent header
+     * @return the viewholder for the first visible child header (not item or parent header)
+     */
+    @Nullable
+    public NestedSectionAdapter.ChildHeaderViewHolder getFirstVisibleChildHeaderViewHolder(boolean fullyVisibleOnly) {
+        return (NestedSectionAdapter.ChildHeaderViewHolder) getFirstVisibleViewHolderOfGivenType(NestedSectionAdapter.TYPE_CHILD_HEADER, fullyVisibleOnly);
+    }
+
+    /**
+     * @param fullyVisibleOnly if true, the search will be limited to the first parent header not hanging off the top of the screen
+     * @return the viewholder for the first visible parent header (not item or child header)
+     */
+    @Nullable
+    public NestedSectionAdapter.ParentHeaderViewHolder getFirstVisibleParentHeaderViewHolder(boolean fullyVisibleOnly) {
+        return (NestedSectionAdapter.ParentHeaderViewHolder) getFirstVisibleViewHolderOfGivenType(NestedSectionAdapter.TYPE_PARENT_HEADER, fullyVisibleOnly);
+    }
+
+    @Nullable
+    private NestedSectionAdapter.ViewHolder getFirstVisibleViewHolderOfGivenType(int baseType, boolean fullyVisibleOnly) {
+        if (getChildCount() == 0) {
+            return null;
+        }
+
+        // we need to discard items which are obscured by a parent or child header, so we get the
+        // the height of the first parent and child header, and filter the items by if their decoratedTop
+        // is below this value
+        int firstParentHeaderBottom = 0;
+        int firstChildHeaderBottom = 0;
+        if (baseType != NestedSectionAdapter.TYPE_PARENT_HEADER) {
+            NestedSectionAdapter.ParentHeaderViewHolder firstParentHeader = getFirstVisibleParentHeaderViewHolder(false);
+            if (firstParentHeader != null) {
+                firstParentHeaderBottom = getDecoratedBottom(firstParentHeader.itemView);
+            }
+        }
+
+        if (baseType != NestedSectionAdapter.TYPE_CHILD_HEADER) {
+            NestedSectionAdapter.ChildHeaderViewHolder firstChildHeader = getFirstVisibleChildHeaderViewHolder(false);
+            if (firstChildHeader != null) {
+                firstChildHeaderBottom = getDecoratedBottom(firstChildHeader.itemView);
+            }
+        }
+        // note: We can't use child view order because we mock with moving things to front
+        View topmostView = null;
+        int top = Integer.MAX_VALUE;
+
+        for (int i = 0, count = getChildCount(); i < count; i++) {
+            View v = getChildAt(i);
+
+            // ignore views which are being deleted
+            if (getViewAdapterPosition(v) == RecyclerView.NO_POSITION) {
+                continue;
+            }
+
+            // filter for desired type
+            if (getViewBaseType(v) != baseType) {
+                continue;
+            }
+
+            // filter out items which are partially or fully obscured by a header
+            int t = getDecoratedTop(v);
+            int b = getDecoratedBottom(v);
+
+            if (fullyVisibleOnly) {
+                if (t < firstParentHeaderBottom) {
+                    continue;
+                }
+
+                if (t < firstChildHeaderBottom){
+                    continue;
+                }
+            } else {
+                if (b <= firstParentHeaderBottom + 1) {
+                    continue;
+                }
+
+                if (b <= firstChildHeaderBottom + 1){
+                    continue;
+                }
+            }
+
+            if (t < top) {
+                top = t;
+                topmostView = v;
+            }
+        }
+
+        return topmostView != null ? getViewBaseViewHolder(topmostView) : null;
+    }
+
+    @Override
+    public void smoothScrollToPosition(RecyclerView recyclerView, RecyclerView.State state, int position) {
+        if (position < 0 || position > getItemCount()) {
+            throw new IndexOutOfBoundsException("adapter position out of range");
+        }
+
+        pendingSavedState = null;
+
+        // see: https://blog.stylingandroid.com/scrolling-recyclerview-part-3/
+        View firstVisibleChild = recyclerView.getChildAt(0);
+        int itemHeight = getEstimatedItemHeightForSmoothScroll(recyclerView);
+        int currentPosition = recyclerView.getChildAdapterPosition(firstVisibleChild);
+        int distanceInPixels = Math.abs((currentPosition - position) * itemHeight);
+        if (distanceInPixels == 0) {
+            distanceInPixels = (int) Math.abs(firstVisibleChild.getY());
+        }
+
+        Context context = recyclerView.getContext();
+        SmoothScroller scroller = new SmoothScroller(context, distanceInPixels);
+        scroller.setTargetPosition(position);
+        startSmoothScroll(scroller);
+    }
+
+    private int getEstimatedItemHeightForSmoothScroll(RecyclerView recyclerView) {
+        int height = 0;
+        for (int i = 0, count = recyclerView.getChildCount(); i < count; i++) {
+            height = Math.max(getDecoratedMeasuredHeight(recyclerView.getChildAt(i)), height);
+        }
+        return height;
+    }
+
+
+    //We only extend the LinearSmoothScroller for its start and stop
+    //interpolators
+    private class SmoothScroller extends LinearSmoothScroller {
+        private static final int TARGET_SEEK_SCROLL_DISTANCE_PX = 10000;
+        private static final float DEFAULT_DURATION = 1000;
+        private final float distanceInPixels;
+        private final float duration;
+
+        SmoothScroller(Context context, int distanceInPixels) {
+            super(context);
+            this.distanceInPixels = distanceInPixels;
+            float millisecondsPerPx = calculateSpeedPerPixel(context.getResources().getDisplayMetrics());
+            this.duration = distanceInPixels < TARGET_SEEK_SCROLL_DISTANCE_PX ?
+                    (int) (Math.abs(distanceInPixels) * millisecondsPerPx) : DEFAULT_DURATION;
+        }
+
+        @Override
+        public PointF computeScrollVectorForPosition(int targetPosition) {
+            return new PointF(0, NestedStickyHeadersLayoutManager.this.computeScrollVectorForPosition(targetPosition));
+        }
+
+        @Override
+        protected int calculateTimeForScrolling(int dx) {
+            float proportion = (float) dx / distanceInPixels;
+            return (int) (duration * proportion);
+        }
+    }
+
+    private int computeScrollVectorForPosition(int targetPosition) {
+        updateFirstAdapterPosition();
+        if (targetPosition > firstViewAdapterPosition) {
+            return 1;
+        } else if (targetPosition < firstViewAdapterPosition) {
+            return -1;
+        }
+        return 0;
+    }
+    int getViewAdapterPosition(View view) {
+        return getViewBaseViewHolder(view).getAdapterPosition();
+    }
+
+    private NestedSectionAdapter.ViewHolder getViewBaseViewHolder(View view) {
         return (NestedSectionAdapter.ViewHolder) view.getTag(R.id.nested_section_view_holder_tag);
     }
+
+    @Override
+    public boolean canScrollVertically() {
+        return true;
+    }
+
+    @Override
+    public void scrollToPosition(int position) {
+        if (position < 0 || position > getItemCount()) {
+            throw new IndexOutOfBoundsException("The given adapter position" + position + " is out of range");
+        }
+
+        scrollTargetAdapterPosition = position;
+        pendingSavedState = null;
+        requestLayout();
+    }
+
+
 
     private View getTopmostChildView() {
         if (getChildCount() == 0) {
@@ -910,6 +1102,6 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
 
     @Override
     public RecyclerView.LayoutParams generateDefaultLayoutParams() {
-        return null;
+        return new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 }

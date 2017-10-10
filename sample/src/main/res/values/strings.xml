@@ -1,3 +1,3 @@
 <resources>
-    <string name="app_name">RecyclerViewStickyHeaders</string>
+    <string name="app_name">RecyclerViewNestedStickyHeaders</string>
 </resources>

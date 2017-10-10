@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical" android:layout_width="match_parent"
+    android:layout_height="@dimen/listitem_item_view_size">
+
+    <TextView
+        android:id="@+id/itemview_tv_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:text="John"
+        android:layout_centerVertical="true"
+        android:layout_marginLeft="72dp"
+        />
+
+</RelativeLayout>

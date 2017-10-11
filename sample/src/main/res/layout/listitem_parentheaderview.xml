@@ -12,6 +12,7 @@
         android:layout_height="wrap_content"
         android:textColor="#a3a3a3"
         tools:text="a-LIST"
+        android:textAppearance="?android:attr/textAppearanceLarge"
         android:textAllCaps="true"
         android:layout_centerVertical="true"
         android:layout_marginLeft="@dimen/horizontal_margin"

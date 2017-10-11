@@ -1,5 +1,6 @@
 package com.senijoshua.recyclerviewstickyheaders;
 
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -10,62 +11,117 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-public class CelebrityListAdapter extends NestedSectionAdapter{
+public class CelebrityListAdapter extends NestedSectionAdapter {
 
-    public CelebrityListAdapter(){
+    List<Celebrity> celebrities = new ArrayList<>();
+    List<Section> sections = new ArrayList<>();
+
+    public CelebrityListAdapter() {
 
     }
 
-    public void setCelebrities(List<Celebrity> celebrities){
+    public void setCelebrities(List<Celebrity> celebrityList) {
+        //reset to initial state
+        celebrities.clear();
+        celebrities.addAll(celebrityList);
+        sections.clear();
 
+        //sort celebrities into two categories,
+        //1.By their name and 2. By their status
+        Section section = null;
+        for (Celebrity celeb : celebrities) {
+            if (celeb.getName().charAt(0) != 0 && celeb.getStatus() != null) {
+                if (section != null) {
+                    sections.add(section);
+                }
+                section = new Section();
+                section.sectionChildTitle = String.valueOf(celeb.getName().charAt(0));
+                section.sectionParentTitle = celeb.getStatus();
+            }
+
+            if (section != null) {
+                section.celebrities.add(celeb);
+            }
+        }
+
+        sections.add(section);
+        notifyAllSectionsDataSetChanged();
     }
 
-    private class Section {
+    private static class Section {
         String sectionChildTitle;
         String sectionParentTitle;
         List<Celebrity> celebrities = new ArrayList<>();
     }
 
     @Override
-    public ItemViewHolder onCreateItemViewHolder(ViewGroup parent, int itemViewType) {
-        return super.onCreateItemViewHolder(parent, itemViewType);
+    public int getNumberOfSections() {
+        return sections.size();
     }
 
     @Override
-    public void onBindItemViewHolder(ItemViewHolder holder, int sectionIndex, int itemIndex, int itemViewType) {
+    public int getNumberOfItemsInSection(int sectionIndex) {
+        return sections.get(sectionIndex).celebrities.size();
+    }
+
+    @Override
+    public boolean doesSectionHaveChildHeader(int sectionIndex) {
+        return true;
+    }
+
+    @Override
+    public boolean doesSectionHaveParentHeader(int sectionIndex) {
+        return true;
+    }
+
+    @Override
+    public NestedSectionAdapter.ItemViewHolder onCreateItemViewHolder(ViewGroup parent, int itemViewType) {
+        return new ItemViewHolder(LayoutInflater.from(parent.getContext()).inflate(R.layout.listitem_itemview, parent, false));
+    }
+
+    @Override
+    public void onBindItemViewHolder(NestedSectionAdapter.ItemViewHolder holder, int sectionIndex, int itemIndex, int itemViewType) {
+        Section section = sections.get(sectionIndex);
+        Celebrity celebrity = section.celebrities.get(itemIndex);
+        ItemViewHolder vh = (ItemViewHolder) holder;
+        vh.name.setText(celebrity.getName());
         super.onBindItemViewHolder(holder, sectionIndex, itemIndex, itemViewType);
     }
 
     @Override
     public ChildHeaderViewHolder onCreateChildHeaderViewHolder(ViewGroup parent, int childHeaderViewType) {
-        return super.onCreateChildHeaderViewHolder(parent, childHeaderViewType);
+        return new ChildHeaderViewHolder(LayoutInflater.from(parent.getContext()).inflate(R.layout.listitem_childheaderview, parent, false));
     }
 
     @Override
-    public void onBindChildHeaderViewHolder(ChildHeaderViewHolder holder, int sectionIndex, int childHeaderViewType) {
-        super.onBindChildHeaderViewHolder(holder, sectionIndex, childHeaderViewType);
+    public void onBindChildHeaderViewHolder(NestedSectionAdapter.ChildHeaderViewHolder holder, int sectionIndex, int childHeaderViewType) {
+        Section section = sections.get(sectionIndex);
+        ChildHeaderViewHolder vh = (ChildHeaderViewHolder) holder;
+        vh.childHeaderName.setText(section.sectionChildTitle);
     }
 
     @Override
     public ParentHeaderViewHolder onCreateParentHeaderViewHolder(ViewGroup parent, int parentHeaderViewType) {
-        return super.onCreateParentHeaderViewHolder(parent, parentHeaderViewType);
+        return new ParentHeaderViewHolder(LayoutInflater.from(parent.getContext()).inflate(R.layout.listitem_parentheaderview, parent, false));
     }
 
     @Override
-    public void onBindParentHeaderViewHolder(ParentHeaderViewHolder holder, int sectionIndex, int parentHeaderViewType) {
-        super.onBindParentHeaderViewHolder(holder, sectionIndex, parentHeaderViewType);
+    public void onBindParentHeaderViewHolder(NestedSectionAdapter.ParentHeaderViewHolder holder, int sectionIndex, int parentHeaderViewType) {
+        Section section = sections.get(sectionIndex);
+        ParentHeaderViewHolder vh = (ParentHeaderViewHolder) holder;
+        vh.parentHeaderName.setText(section.sectionParentTitle );
     }
 
-    public class ItemViewholder extends NestedSectionAdapter.ItemViewHolder{
+    public class ItemViewHolder extends NestedSectionAdapter.ItemViewHolder {
         TextView name;
 
-        public ItemViewholder(View itemView) {
+        public ItemViewHolder(View itemView) {
             super(itemView);
             name = (TextView) itemView.findViewById(R.id.itemview_tv_name);
         }
     }
 
-    public class ChildHeaderViewHolder extends NestedSectionAdapter.ChildHeaderViewHolder{
+    public class ChildHeaderViewHolder extends NestedSectionAdapter.ChildHeaderViewHolder {
         TextView childHeaderName;
 
         public ChildHeaderViewHolder(View itemView) {
@@ -74,7 +130,7 @@ public class CelebrityListAdapter extends NestedSectionAdapter{
         }
     }
 
-    public class ParentHeaderViewHolder extends NestedSectionAdapter.ParentHeaderViewHolder{
+    public class ParentHeaderViewHolder extends NestedSectionAdapter.ParentHeaderViewHolder {
         TextView parentHeaderName;
 
         public ParentHeaderViewHolder(View itemView) {

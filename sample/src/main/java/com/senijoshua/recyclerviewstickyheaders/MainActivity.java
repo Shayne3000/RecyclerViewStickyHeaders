@@ -2,7 +2,6 @@ package com.senijoshua.recyclerviewstickyheaders;
 
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 
 import com.senijoshua.library.NestedStickyHeadersLayoutManager;
@@ -30,7 +29,7 @@ public class MainActivity extends AppCompatActivity {
 //            }
 //        });
         celebrityAdapter.setCelebrities(CelebrityUtility.loadCelebrities());
-        celebrityList.setLayoutManager(new LinearLayoutManager(this));
+        celebrityList.setLayoutManager(mLayoutManager);
         celebrityList.setAdapter(celebrityAdapter);
 
     }

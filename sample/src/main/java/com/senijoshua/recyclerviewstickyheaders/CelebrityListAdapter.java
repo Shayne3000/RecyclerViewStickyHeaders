@@ -8,6 +8,8 @@ import android.widget.TextView;
 import com.senijoshua.library.NestedSectionAdapter;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 
@@ -45,6 +47,12 @@ public class CelebrityListAdapter extends NestedSectionAdapter {
         }
 
         sections.add(section);
+        Collections.sort(sections, new Comparator<Section>() {
+            @Override
+            public int compare(Section section1, Section section2) {
+                return section1.sectionParentTitle.compareToIgnoreCase(section2.sectionParentTitle);
+            }
+        });
         notifyAllSectionsDataSetChanged();
     }
 
@@ -66,12 +74,24 @@ public class CelebrityListAdapter extends NestedSectionAdapter {
 
     @Override
     public boolean doesSectionHaveChildHeader(int sectionIndex) {
-        return true;
+        Section section = sections.get(sectionIndex);
+        if (sectionIndex - 1 != -1){
+            Section previousSection = sections.get(sectionIndex - 1);
+            return !previousSection.sectionChildTitle.equals(section.sectionChildTitle);
+        } else {
+            return true;
+        }
     }
 
     @Override
     public boolean doesSectionHaveParentHeader(int sectionIndex) {
-        return true;
+        Section section = sections.get(sectionIndex);
+        if (sectionIndex - 1 != -1){
+            Section previousSection = sections.get(sectionIndex - 1);
+            return !previousSection.sectionParentTitle.equals(section.sectionParentTitle);
+        } else {
+            return true;
+        }
     }
 
     @Override
@@ -109,7 +129,7 @@ public class CelebrityListAdapter extends NestedSectionAdapter {
     public void onBindParentHeaderViewHolder(NestedSectionAdapter.ParentHeaderViewHolder holder, int sectionIndex, int parentHeaderViewType) {
         Section section = sections.get(sectionIndex);
         ParentHeaderViewHolder vh = (ParentHeaderViewHolder) holder;
-        vh.parentHeaderName.setText(section.sectionParentTitle );
+        vh.parentHeaderName.setText(section.sectionParentTitle + "- list");
     }
 
     public class ItemViewHolder extends NestedSectionAdapter.ItemViewHolder {

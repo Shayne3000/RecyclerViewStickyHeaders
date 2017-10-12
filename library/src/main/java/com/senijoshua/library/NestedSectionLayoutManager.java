@@ -15,22 +15,20 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * This provides the same functionality as the LinearLayoutManager usually paired the RecyclerView. However, this
- * provides the additional feature of positioning the section parent/child headers in a sticky manner.
- */
 
-public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager {
+public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
 
-    private static final String CLASS_NAME = NestedStickyHeadersLayoutManager.class.getSimpleName();
+    /**
+     * This provides the same functionality as the LinearLayoutManager that is usually paired the RecyclerView. However, this
+     * provides the additional feature of positioning the section parent/child headers in a sticky manner.
+     */
+
+    private static final String CLASS_NAME = NestedSectionLayoutManager.class.getSimpleName();
 
     private NestedSectionAdapter adapter;
 
-    // holds all the visible section child headers
-    private HashSet<View> ChildHeaderViews = new HashSet<>();
-
-    // holds all the visible section parent headers
-    private HashSet<View> ParentHeaderViews = new HashSet<>();
+    // holds all the visible headers both parent and child
+    private HashSet<View> HeaderViews = new HashSet<>();
 
     // holds the ChildHeaderPosition for each child header
     private HashMap<Integer, ChildHeaderPosition> childHeaderPositionsBySection = new HashMap<>();
@@ -48,7 +46,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
     // top of first (lowest-y-value) visible item.
     private int firstViewTop;
 
-    // adapter position (iff >= 0) of the item selected in scrollToPosition
+    // adapter position (if it's >= 0) of the item selected in scrollToPosition
     private int scrollTargetAdapterPosition = -1;
 
     private SavedState pendingSavedState;
@@ -99,7 +97,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
         void onChildHeaderPositionChanged(int sectionIndex, View header, ChildHeaderPosition oldPosition, ChildHeaderPosition newPosition);
     }
 
-    public NestedStickyHeadersLayoutManager() {
+    public NestedSectionLayoutManager() {
     }
 
     public ChildHeaderPositionChangedCallback getChildHeaderPositionChangedCallback() {
@@ -140,9 +138,8 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
 
         removeAllViews();
 
-        ChildHeaderViews.clear();
+        HeaderViews.clear();
         childHeaderPositionsBySection.clear();
-        ParentHeaderViews.clear();
         parentHeaderPositionsBySection.clear();
     }
 
@@ -217,9 +214,8 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
         int top = firstViewTop;
 
         // RESET
-        ChildHeaderViews.clear();
+        HeaderViews.clear();
         childHeaderPositionsBySection.clear();
-        ParentHeaderViews.clear();
         parentHeaderPositionsBySection.clear();
         detachAndScrapAttachedViews(recycler);
 
@@ -235,7 +231,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
             firstViewAdapterPosition = 0;
         }
 
-        // walk through adapter starting at firstViewAdapterPosition stacking each vended item
+        // walk through adapter starting at firstViewAdapterPosition stacking each rendered item
         for (int adapterPosition = firstViewAdapterPosition; adapterPosition < state.getItemCount(); adapterPosition++) {
 
             View v = recycler.getViewForPosition(adapterPosition);
@@ -244,7 +240,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
 
             int itemViewType = getViewBaseType(v);
             if (itemViewType == NestedSectionAdapter.TYPE_PARENT_HEADER) {
-                ParentHeaderViews.add(v);
+                HeaderViews.add(v);
 
                 // use the parent header's height
                 height = getDecoratedMeasuredHeight(v);
@@ -308,7 +304,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
             // parent header absent, create one
             int parentHeaderAdapterPosition = adapter.getAdapterPositionForSectionParentHeader(sectionIndex);
             View parentHeaderView = recycler.getViewForPosition(parentHeaderAdapterPosition);
-            ParentHeaderViews.add(parentHeaderView);
+            HeaderViews.add(parentHeaderView);
             addView(parentHeaderView);
             measureChildWithMargins(parentHeaderView, 0, 0);
 
@@ -516,7 +512,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
                     createSectionParentHeaderIfNeeded(recycler, sectionIndex);
                 }
 
-                if (adapter.doesSectionHaveChildHeader(sectionIndex)){
+                if (adapter.doesSectionHaveChildHeader(sectionIndex)) {
                     createSectionChildHeaderIfNeeded(recycler, sectionIndex);
                 }
             }
@@ -526,7 +522,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
         int left = getPaddingLeft();
         int right = getWidth() - getPaddingRight();
 
-        for (View parentHeaderView : ParentHeaderViews) {
+        for (View parentHeaderView : HeaderViews) {
             int sectionIndex = getViewSectionIndex(parentHeaderView);
 
             // find first and last non-parent header views in this section
@@ -548,7 +544,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
                 int viewSectionIndex = getViewSectionIndex(view);
                 if (viewSectionIndex == sectionIndex) {
                     if (type == NestedSectionAdapter.TYPE_CHILD_HEADER) {
-                       Log.i(CLASS_NAME, "child header");
+                        childHeader = view;
                     }
                 } else if (viewSectionIndex == sectionIndex + 1) {
                     if (firstViewInNextSection == null) {
@@ -587,14 +583,14 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
             recordParentHeaderPositionAndNotify(sectionIndex, parentHeaderView, headerPosition);
         }
 
-        for (View childHeaderView : ChildHeaderViews){
+        for (View childHeaderView : ChildHeaderViews) {
             int sectionIndex = getViewSectionIndex(childHeaderView);
             View firstViewInNextSection = null;
 
-            for (int i = 0, count = getChildCount(); i < count; i++){
+            for (int i = 0, count = getChildCount(); i < count; i++) {
                 View view = getChildAt(i);
 
-                if (isViewRecycled(view)){
+                if (isViewRecycled(view)) {
                     continue;
                 }
 
@@ -603,8 +599,8 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
                     continue;
 
                 int viewSectionIndex = getViewSectionIndex(view);
-                if (viewSectionIndex == sectionIndex + 1){
-                    if (firstViewInNextSection == null){
+                if (viewSectionIndex == sectionIndex + 1) {
+                    if (firstViewInNextSection == null) {
                         firstViewInNextSection = view;
                     }
                 }
@@ -677,7 +673,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
                 float translationY = view.getTranslationY();
                 if ((getDecoratedBottom(view) + translationY) < 0 || (getDecoratedTop(view) + translationY) > height) {
                     viewsToRecycle.add(view);
-                    ParentHeaderViews.remove(view);
+                    HeaderViews.remove(view);
                     parentHeaderPositionsBySection.remove(sectionIndex);
                 }
             } else if (getViewBaseType(view) == NestedSectionAdapter.TYPE_CHILD_HEADER && !remainingSections.contains(sectionIndex)) {
@@ -757,7 +753,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
             return firstViewTop;
         }
 
-        // as far as I can tell, if notifyDataSetChanged is called, onLayoutChildren
+        // if notifyDataSetChanged is called, onLayoutChildren
         // will be called, but all views will be marked as having NO_POSITION for
         // adapterPosition, which means the above approach of finding the topmostChildView
         // doesn't work. So, basically, leave firstViewAdapterPosition and firstViewTop
@@ -857,7 +853,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
                     continue;
                 }
 
-                if (t < firstChildHeaderBottom){
+                if (t < firstChildHeaderBottom) {
                     continue;
                 }
             } else {
@@ -865,7 +861,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
                     continue;
                 }
 
-                if (b <= firstChildHeaderBottom + 1){
+                if (b <= firstChildHeaderBottom + 1) {
                     continue;
                 }
             }
@@ -948,6 +944,7 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
         }
         return 0;
     }
+
     int getViewAdapterPosition(View view) {
         return getViewBaseViewHolder(view).getAdapterPosition();
     }
@@ -971,7 +968,6 @@ public class NestedStickyHeadersLayoutManager extends RecyclerView.LayoutManager
         pendingSavedState = null;
         requestLayout();
     }
-
 
 
     private View getTopmostChildView() {

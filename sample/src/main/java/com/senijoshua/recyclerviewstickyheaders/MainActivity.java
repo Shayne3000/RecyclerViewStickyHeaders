@@ -4,12 +4,12 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.RecyclerView;
 
-import com.senijoshua.library.NestedStickyHeadersLayoutManager;
+import com.senijoshua.library.NestedLayoutManager;
 
 public class MainActivity extends AppCompatActivity {
     RecyclerView celebrityList;
-    CelebrityListAdapter celebrityAdapter;
-    NestedStickyHeadersLayoutManager mLayoutManager;
+    CelebAdapter celebrityAdapter;
+    NestedLayoutManager mLayoutManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -17,8 +17,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         celebrityList = (RecyclerView) findViewById(R.id.main_rv_celebrity_list);
-        celebrityAdapter = new CelebrityListAdapter();
-        mLayoutManager = new NestedStickyHeadersLayoutManager();
+        celebrityAdapter = new CelebAdapter();
+        mLayoutManager = new NestedLayoutManager();
 //        mLayoutManager.setParentHeaderPositionChangedCallback(new NestedStickyHeadersLayoutManager.ParentHeaderPositionChangedCallback() {
 //            @Override
 //            public void onParentHeaderPositionChanged(int sectionIndex, View header, NestedStickyHeadersLayoutManager.ParentHeaderPosition oldPosition, NestedStickyHeadersLayoutManager.ParentHeaderPosition newPosition) {
@@ -28,6 +28,7 @@ public class MainActivity extends AppCompatActivity {
 //                }
 //            }
 //        });
+        
         celebrityAdapter.setCelebrities(CelebrityUtility.loadCelebrities());
         celebrityList.setLayoutManager(mLayoutManager);
         celebrityList.setAdapter(celebrityAdapter);

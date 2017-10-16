@@ -4,7 +4,6 @@ import android.content.Context;
 import android.graphics.PointF;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.support.annotation.Nullable;
 import android.support.v7.widget.LinearSmoothScroller;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
@@ -246,18 +245,13 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
                 height = getDecoratedMeasuredHeight(v);
                 layoutDecorated(v, left, top, right, top + height);
 
-                adapterPosition++;
-
             } else if (itemViewType == NestedSectionAdapter.TYPE_CHILD_HEADER) {
-
-                ChildHeaderViews.add(v);
+                HeaderViews.add(v);
 
                 // use the child header's height
                 height = getDecoratedMeasuredHeight(v);
-
                 layoutDecorated(v, left, top, right, top + height);
 
-                adapterPosition++;
             } else {
                 height = getDecoratedMeasuredHeight(v);
                 layoutDecorated(v, left, top, right, top + height);
@@ -334,7 +328,7 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
             // child header absent, create one
             int childHeaderAdapterPosition = adapter.getAdapterPositionForSectionChildHeader(sectionIndex);
             View childHeaderView = recycler.getViewForPosition(childHeaderAdapterPosition);
-            ChildHeaderViews.add(childHeaderView);
+            HeaderViews.add(childHeaderView);
             addView(childHeaderView);
             measureChildWithMargins(childHeaderView, 0, 0);
 
@@ -377,9 +371,10 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
                     // we're skipping the headers. they should already be rendered
                     int itemViewType = adapter.getItemViewBaseType(firstViewAdapterPosition);
                     boolean isChildHeader = itemViewType == NestedSectionAdapter.TYPE_CHILD_HEADER;
+                    boolean isParentHeader = itemViewType == NestedSectionAdapter.TYPE_PARENT_HEADER;
 
                     // skip the header, move to next item above
-                    if (isChildHeader) {
+                    if (isChildHeader || isParentHeader) {
                         firstViewAdapterPosition--;
                         if (firstViewAdapterPosition < 0) {
                             break;
@@ -387,26 +382,10 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
 
                         itemViewType = adapter.getItemViewBaseType(firstViewAdapterPosition);
                         isChildHeader = itemViewType == NestedSectionAdapter.TYPE_CHILD_HEADER;
-
-                        // If it's still a child header, we don't need to do anything right now
-                        if (isChildHeader) {
-                            break;
-                        }
-                    }
-
-                    boolean isParentHeader = itemViewType == NestedSectionAdapter.TYPE_PARENT_HEADER;
-
-                    if (isParentHeader) {
-                        firstViewAdapterPosition--;
-                        if (firstViewAdapterPosition < 0) {
-                            break;
-                        }
-
-                        itemViewType = adapter.getItemViewBaseType(firstViewAdapterPosition);
                         isParentHeader = itemViewType == NestedSectionAdapter.TYPE_PARENT_HEADER;
 
-                        // If it's still a parent header, we don't need to do anything right now
-                        if (isParentHeader) {
+                        // If it's still a child or parentheader, we don't need to do anything right now
+                        if (isChildHeader || isParentHeader) {
                             break;
                         }
                     }
@@ -451,22 +430,26 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
                     if (itemViewType == NestedSectionAdapter.TYPE_PARENT_HEADER) {
 
                         View parentHeaderView = createSectionParentHeaderIfNeeded(recycler, adapter.getSectionForAdapterPosition(nextAdapterPosition));
-                        addView(parentHeaderView);
-
-                        measureChildWithMargins(parentHeaderView, 0, 0);
                         int height = getDecoratedMeasuredHeight(parentHeaderView);
                         layoutDecorated(parentHeaderView, left, 0, right, height);
-                        bottomView = parentHeaderView;
+                        addView(parentHeaderView);
+
+//                        measureChildWithMargins(parentHeaderView, 0, 0);
+//
+//                        layoutDecorated(parentHeaderView, left, 0, right, height);
+//                        bottomView = parentHeaderView;
 
                     } else if (itemViewType == NestedSectionAdapter.TYPE_CHILD_HEADER) {
 
                         View childHeaderView = createSectionChildHeaderIfNeeded(recycler, adapter.getSectionForAdapterPosition(nextAdapterPosition));
-                        addView(childHeaderView);
-
-                        measureChildWithMargins(childHeaderView, 0, 0);
                         int height = getDecoratedMeasuredHeight(childHeaderView);
                         layoutDecorated(childHeaderView, left, 0, right, height);
-                        bottomView = childHeaderView;
+                        addView(childHeaderView);
+
+//                        measureChildWithMargins(childHeaderView, 0, 0);
+//                        int height = getDecoratedMeasuredHeight(childHeaderView);
+//                        layoutDecorated(childHeaderView, left, 0, right, height);
+//                        bottomView = childHeaderView;
 
                     } else {
 
@@ -522,8 +505,8 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
         int left = getPaddingLeft();
         int right = getWidth() - getPaddingRight();
 
-        for (View parentHeaderView : HeaderViews) {
-            int sectionIndex = getViewSectionIndex(parentHeaderView);
+        for (View headerView : HeaderViews) {
+            int sectionIndex = getViewSectionIndex(headerView);
 
             // find first and last non-parent header views in this section
             View childHeader = null;
@@ -553,17 +536,18 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
                 }
             }
 
-            int height = getDecoratedMeasuredHeight(parentHeaderView);
+            int height = getDecoratedMeasuredHeight(headerView);
             int top = getPaddingTop();
 
             // initial header position mark
-            ParentHeaderPosition headerPosition = ParentHeaderPosition.STICKY;
-
+            ParentHeaderPosition parentHeaderPosition = ParentHeaderPosition.STICKY;
+            ChildHeaderPosition childHeaderPosition = ChildHeaderPosition.TRAILING;
             if (childHeader != null) {
                 int childHeaderTop = getDecoratedTop(childHeader);
                 if (childHeaderTop >= top) {
                     top = childHeaderTop;
-                    headerPosition = ParentHeaderPosition.NATURAL;
+                    childHeaderPosition =  ChildHeaderPosition.STICKY;
+                    parentHeaderPosition = ParentHeaderPosition.NATURAL;
                 }
             }
 
@@ -571,62 +555,19 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
                 int nextViewTop = getDecoratedTop(firstViewInNextSection);
                 if (nextViewTop - height < top) {
                     top = nextViewTop - height;
-                    headerPosition = ParentHeaderPosition.TRAILING;
+                    childHeaderPosition =  ChildHeaderPosition.NATURAL;
+                    parentHeaderPosition = ParentHeaderPosition.TRAILING;
                 }
             }
 
             // now bring header to front of stack for overlap, and position it
-            parentHeaderView.bringToFront();
-            layoutDecorated(parentHeaderView, left, top, right, top + height);
+            headerView.bringToFront();
+            layoutDecorated(headerView, left, top, right, top + height);
 
             // notify adapter of positioning for this header
-            recordParentHeaderPositionAndNotify(sectionIndex, parentHeaderView, headerPosition);
+            recordHeaderPositionAndNotify(sectionIndex, headerView, parentHeaderPosition, childHeaderPosition);
         }
 
-        for (View childHeaderView : ChildHeaderViews) {
-            int sectionIndex = getViewSectionIndex(childHeaderView);
-            View firstViewInNextSection = null;
-
-            for (int i = 0, count = getChildCount(); i < count; i++) {
-                View view = getChildAt(i);
-
-                if (isViewRecycled(view)) {
-                    continue;
-                }
-
-                int type = getViewBaseType(view);
-                if (type == NestedSectionAdapter.TYPE_CHILD_HEADER)
-                    continue;
-
-                int viewSectionIndex = getViewSectionIndex(view);
-                if (viewSectionIndex == sectionIndex + 1) {
-                    if (firstViewInNextSection == null) {
-                        firstViewInNextSection = view;
-                    }
-                }
-            }
-
-            int height = getDecoratedMeasuredHeight(childHeaderView);
-            int top = getPaddingTop();
-
-            // initial child header position mark
-            ChildHeaderPosition childHeaderPosition = ChildHeaderPosition.STICKY;
-
-            if (firstViewInNextSection != null) {
-                int nextViewTop = getDecoratedTop(firstViewInNextSection);
-                if (nextViewTop - height < top) {
-                    top = nextViewTop - height;
-                    childHeaderPosition = ChildHeaderPosition.TRAILING;
-                }
-            }
-
-            // now bring the child header to front of stack for overlap, and position it
-            childHeaderView.bringToFront();
-            layoutDecorated(childHeaderView, left, top, right, top + height);
-
-            // notify adapter of the positioning for this child header
-            recordChildHeaderPositionAndNotify(sectionIndex, childHeaderView, childHeaderPosition);
-        }
     }
 
     private void recycleViewsOutOfBounds(RecyclerView.Recycler recycler) {
@@ -681,7 +622,7 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
                 float translationY = view.getTranslationY();
                 if ((getDecoratedBottom(view) + translationY) < 0 || (getDecoratedTop(view) + translationY) > height) {
                     viewsToRecycle.add(view);
-                    ChildHeaderViews.remove(view);
+                    HeaderViews.remove(view);
                     childHeaderPositionsBySection.remove(sectionIndex);
                 }
             }
@@ -694,6 +635,14 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
 
         // determine the adapter adapterPosition of first visible item
         updateFirstAdapterPosition();
+    }
+
+    private void recordHeaderPositionAndNotify(int sectionIndex, View headerView, ParentHeaderPosition newParentHeaderPosition, ChildHeaderPosition  newChildHeaderPosition){
+        if (getViewBaseType(headerView) == NestedSectionAdapter.TYPE_PARENT_HEADER){
+            recordParentHeaderPositionAndNotify(sectionIndex, headerView, newParentHeaderPosition);
+        } else if (getViewBaseType(headerView) == NestedSectionAdapter.TYPE_CHILD_HEADER){
+            recordChildHeaderPositionAndNotify(sectionIndex, headerView, newChildHeaderPosition);
+        }
     }
 
     private void recordParentHeaderPositionAndNotify(int sectionIndex, View headerView, ParentHeaderPosition newHeaderPosition) {
@@ -776,105 +725,6 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
     }
 
 
-    /**
-     * @param fullyVisibleOnly if true, the search will be limited to the first item not hanging off the top of the screen or partially obscured by a parent or child header
-     * @return the viewholder for the first visible item (not parent or child header)
-     */
-    @Nullable
-    public NestedSectionAdapter.ItemViewHolder getFirstVisibleItemViewHolder(boolean fullyVisibleOnly) {
-        return (NestedSectionAdapter.ItemViewHolder) getFirstVisibleViewHolderOfGivenType(NestedSectionAdapter.TYPE_ITEM, fullyVisibleOnly);
-    }
-
-    /**
-     * @param fullyVisibleOnly if true, the search will be limited to the first child header not hanging off the top of the screen or partially obscured by a parent header
-     * @return the viewholder for the first visible child header (not item or parent header)
-     */
-    @Nullable
-    public NestedSectionAdapter.ChildHeaderViewHolder getFirstVisibleChildHeaderViewHolder(boolean fullyVisibleOnly) {
-        return (NestedSectionAdapter.ChildHeaderViewHolder) getFirstVisibleViewHolderOfGivenType(NestedSectionAdapter.TYPE_CHILD_HEADER, fullyVisibleOnly);
-    }
-
-    /**
-     * @param fullyVisibleOnly if true, the search will be limited to the first parent header not hanging off the top of the screen
-     * @return the viewholder for the first visible parent header (not item or child header)
-     */
-    @Nullable
-    public NestedSectionAdapter.ParentHeaderViewHolder getFirstVisibleParentHeaderViewHolder(boolean fullyVisibleOnly) {
-        return (NestedSectionAdapter.ParentHeaderViewHolder) getFirstVisibleViewHolderOfGivenType(NestedSectionAdapter.TYPE_PARENT_HEADER, fullyVisibleOnly);
-    }
-
-    @Nullable
-    private NestedSectionAdapter.ViewHolder getFirstVisibleViewHolderOfGivenType(int baseType, boolean fullyVisibleOnly) {
-        if (getChildCount() == 0) {
-            return null;
-        }
-
-        // we need to discard items which are obscured by a parent or child header, so we get the
-        // the height of the first parent and child header, and filter the items by if their decoratedTop
-        // is below this value
-        int firstParentHeaderBottom = 0;
-        int firstChildHeaderBottom = 0;
-        if (baseType != NestedSectionAdapter.TYPE_PARENT_HEADER) {
-            NestedSectionAdapter.ParentHeaderViewHolder firstParentHeader = getFirstVisibleParentHeaderViewHolder(false);
-            if (firstParentHeader != null) {
-                firstParentHeaderBottom = getDecoratedBottom(firstParentHeader.itemView);
-            }
-        }
-
-        if (baseType != NestedSectionAdapter.TYPE_CHILD_HEADER) {
-            NestedSectionAdapter.ChildHeaderViewHolder firstChildHeader = getFirstVisibleChildHeaderViewHolder(false);
-            if (firstChildHeader != null) {
-                firstChildHeaderBottom = getDecoratedBottom(firstChildHeader.itemView);
-            }
-        }
-        // note: We can't use child view order because we mock with moving things to front
-        View topmostView = null;
-        int top = Integer.MAX_VALUE;
-
-        for (int i = 0, count = getChildCount(); i < count; i++) {
-            View v = getChildAt(i);
-
-            // ignore views which are being deleted
-            if (getViewAdapterPosition(v) == RecyclerView.NO_POSITION) {
-                continue;
-            }
-
-            // filter for desired type
-            if (getViewBaseType(v) != baseType) {
-                continue;
-            }
-
-            // filter out items which are partially or fully obscured by a header
-            int t = getDecoratedTop(v);
-            int b = getDecoratedBottom(v);
-
-            if (fullyVisibleOnly) {
-                if (t < firstParentHeaderBottom) {
-                    continue;
-                }
-
-                if (t < firstChildHeaderBottom) {
-                    continue;
-                }
-            } else {
-                if (b <= firstParentHeaderBottom + 1) {
-                    continue;
-                }
-
-                if (b <= firstChildHeaderBottom + 1) {
-                    continue;
-                }
-            }
-
-            if (t < top) {
-                top = t;
-                topmostView = v;
-            }
-        }
-
-        return topmostView != null ? getViewBaseViewHolder(topmostView) : null;
-    }
-
     @Override
     public void smoothScrollToPosition(RecyclerView recyclerView, RecyclerView.State state, int position) {
         if (position < 0 || position > getItemCount()) {
@@ -925,7 +775,7 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
 
         @Override
         public PointF computeScrollVectorForPosition(int targetPosition) {
-            return new PointF(0, NestedStickyHeadersLayoutManager.this.computeScrollVectorForPosition(targetPosition));
+            return new PointF(0, NestedSectionLayoutManager.this.computeScrollVectorForPosition(targetPosition));
         }
 
         @Override
@@ -987,13 +837,13 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
             }
 
             // ignore headers
-            if (getViewBaseType(v) == NestedSectionAdapter.TYPE_CHILD_HEADER) {
-                continue;
-            }
+//            if (getViewBaseType(v) == NestedSectionAdapter.TYPE_CHILD_HEADER) {
+//                continue;
+//            }
 
-            if (getViewBaseType(v) == NestedSectionAdapter.TYPE_PARENT_HEADER) {
-                continue;
-            }
+//            if (getViewBaseType(v) == NestedSectionAdapter.TYPE_PARENT_HEADER) {
+//                continue;
+//            }
 
             int t = getDecoratedTop(v);
             if (t < top) {
@@ -1022,13 +872,13 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
             }
 
             // ignore headers
-            if (getViewBaseType(v) == NestedSectionAdapter.TYPE_CHILD_HEADER) {
-                continue;
-            }
-
-            if (getViewBaseType(v) == NestedSectionAdapter.TYPE_PARENT_HEADER) {
-                continue;
-            }
+//            if (getViewBaseType(v) == NestedSectionAdapter.TYPE_CHILD_HEADER) {
+//                continue;
+//            }
+//
+//            if (getViewBaseType(v) == NestedSectionAdapter.TYPE_PARENT_HEADER) {
+//                continue;
+//            }
 
             int b = getDecoratedBottom(v);
             if (b > bottom) {
@@ -1098,6 +948,6 @@ public class NestedSectionLayoutManager extends RecyclerView.LayoutManager{
 
     @Override
     public RecyclerView.LayoutParams generateDefaultLayoutParams() {
-        return new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        return new RecyclerView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 }
